@@ -10,12 +10,22 @@ const YOUTUBE_REGEX = /^(https?:\/\/)?(www\.)?(youtube\.com\/(watch\?v=|shorts\/
 function isYouTubeUrl(q) { return YOUTUBE_REGEX.test(q); }
 
 async function getYtdlpAudioUrl(url) {
-  const { stdout } = await execAsync(`yt-dlp -x -f bestaudio --get-url "${url}"`);
-  return stdout.trim().split("\n")[0];
+  try {
+    const { stdout } = await execAsync(`yt-dlp -x -f bestaudio --get-url "${url}"`);
+    return stdout.trim().split("\n")[0];
+  } catch (err) {
+    console.warn(`[yt-dlp] getYtdlpAudioUrl failed for ${url}:`, err.message);
+    return null;
+  }
 }
 async function getYtdlpTitle(url) {
-  const { stdout } = await execAsync(`yt-dlp --get-title "${url}"`);
-  return stdout.trim().split("\n")[0] ?? url;
+  try {
+    const { stdout } = await execAsync(`yt-dlp --get-title "${url}"`);
+    return stdout.trim().split("\n")[0] ?? url;
+  } catch (err) {
+    console.warn(`[yt-dlp] getYtdlpTitle failed for ${url}:`, err.message);
+    return null;
+  }
 }
 
 const pendingSearches = new Map();
@@ -51,7 +61,9 @@ client.on(Events.MessageCreate, async (message) => {
       let searchQuery = query, titleHint;
       if (isYouTubeUrl(query)) {
         await message.reply("🔍 Fetching YouTube audio...");
-        [searchQuery, titleHint] = await Promise.all([getYtdlpAudioUrl(query), getYtdlpTitle(query)]);
+        const [audioUrl, title] = await Promise.all([getYtdlpAudioUrl(query), getYtdlpTitle(query)]);
+        if (audioUrl) searchQuery = audioUrl;
+        titleHint = title ?? undefined;
       }
       const result = await player.search(searchQuery, { requestedBy: message.author });
       if (!result.hasTracks()) return message.reply("No results found 😢");
